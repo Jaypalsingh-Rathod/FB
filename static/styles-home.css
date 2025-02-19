@@ -1,0 +1,57 @@
+/* General Styling */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #3e3c3c;
+    color: #000000;
+    justify-content: center;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: row;
+}
+
+
+
+h2, h3 {
+    color: #000000;
+    border-bottom: 2px solid #ddd;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+a {
+    color: #4CAF50;
+    text-decoration: underline;
+}
+
+p {
+    margin: 10px 0;
+}
+
+/* Post Styling */
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+li {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+/*yr time stamp hai photo k niche ka */
+small {
+    color: #777;
+}
+
+/* Image Styling */
+img {
+    display: block;
+    margin-top: 10px;
+    max-width: 100%;
+    height: auto;
+    border-radius: 5px;
+}

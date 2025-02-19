@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ user.username }}'s Profile</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles-profile.css') }}">
+</head>
+<body>
+
+    <div class="profile-container">
+        <h1>{{ user.username }}'s Profile</h1>
+
+        {% if current_user and current_user.id != user.id %}
+            {% if current_user.is_friend(user) %}
+                <!-- Show "Unfriend" button if users are already friends -->
+                <form action="{{ url_for('unfriend', user_id=user.id) }}" method="post" style="display:inline;">
+                    <button type="submit" class="btn">Unfriend</button>
+                </form>
+                <p>You and {{ user.username }} are friends.</p>
+            {% else %}
+                <!-- Show "Add Friend" button if they are not already friends -->
+                <form action="{{ url_for('send_request', user_id=user.id) }}" method="post" style="display:inline;">
+                    <button type="submit" class="btn">Add Friend</button>
+                </form>
+                <p>This profile is private until you become friends with {{ user.username }}.</p>
+            {% endif %}
+        {% endif %}
+        {% if current_user and user.id != current_user.id %}
+        <a href="{{ url_for('message_page', username=user.username) }}" class="btn btn-primary">Message</a>
+    {% endif %}
+        {% if current_user %}
+            <p class="welcome">Welcome, {{ current_user.username }}!</p>
+        {% else %}
+            <p>Please log in to view this profile.</p>
+        {% endif %}
+
+        <div class="profile-photo">
+            {% if user.photo %}
+                <img src="{{ url_for('static', filename='uploads/' + user.photo) }}" alt="Profile Photo" width="150">
+            {% else %}
+                <p>No profile photo uploaded.</p>
+            {% endif %}
+        </div>
+
+        <!-- Only show "Upload Profile Photo" link if the current user is viewing their own profile -->
+        {% if current_user.id == user.id %}
+            <a href="{{ url_for('upload_photo') }}" class="upload-link">Upload Profile Photo</a>
+        {% endif %}
+
+        {% if not can_add_friend %}
+            <h3>Posts</h3>
+            <ul class="post-list">
+                {% for post in posts %}
+                    <li class="post-item">
+                        <p>{{ post.content }} - <small>{{ post.timestamp }}</small></p>
+                        {% if post.image %}
+                            <!-- Display the image if it exists -->
+                            <img src="{{ url_for('static', filename='uploads/' + post.image) }}" alt="Post Image" width="300">
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        <a href="{{ url_for('home') }}" class="back-link">Back to Home</a>
+        
+    </div>
+
+
+</body>
+</html>

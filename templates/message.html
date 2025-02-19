@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen">
+    <h2 class="text-2xl font-semibold text-center mb-4">Chat with {{ receiver.username }}</h2>
+    <a href="{{ url_for('home') }}" class="back-link">Home</a>
+
+
+
+    <div class="w-full max-w-2xl bg-gray-800 rounded-lg shadow-lg p-4 h-96 overflow-y-auto"></div>
+    <ul id="messages" class="space-y-3">
+        {% for message in messages %}
+            <li class="p-3 rounded-lg {% if message.sender.username == sender.username %}bg-blue-500 text-white self-end{% else %}bg-gray-700 text-gray-300 self-start{% endif %}">                <strong>{{ 'You' if message.sender.username == sender.username else message.sender.username }}:</strong>
+                {{ message.content or '' }}
+                <span class="attachment-container" data-attachment="{{ message.attachment }}" data-type="{{ message.attachment_type }}"></span>
+                <em class="text-xs block mt-1">{{ message.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</em>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<!-- CSS for Pop-up -->
+<style>
+    .popup {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+        text-align: center;
+    }
+    .popup button {
+        margin: 10px;
+        padding: 10px 15px;
+        border: none;
+        cursor: pointer;
+    }
+
+    .video-container {
+        position: relative;
+        width: 100%;
+        height: 100vh;
+        background: black;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    #remoteVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* ✅ Ensure full-screen remote video */
+    }
+
+    .small-video {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 160px;
+        height: 120px;
+        border: 2px solid white;
+        border-radius: 10px;
+        background: black;
+        object-fit: cover;
+    }
+
+</style>
+
+
+
+<!-- Message Input & Send Button -->
+<div class="flex w-full max-w-2xl mt-4 space-x-2">
+    <input type="text" id="messageInput" placeholder="Type your message..." class="w-full p-2 bg-gray-700 text-white rounded-lg focus:outline-none">
+    
+    <!-- Hidden File Input -->
+    <input type="file" id="attachmentInput" accept="image/*, video/*, audio/*" class="hidden">
+
+    <!-- Visible Upload Button -->
+    <button onclick="document.getElementById('attachmentInput').click()" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">📂 Upload</button>
+
+    <button onclick="sendMessage()" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg">Send</button>
+</div>
+
+<!-- Selected File Name Display -->
+<p id="fileNameDisplay" class="text-sm text-gray-300 mt-2"></p>
+
+
+
+<!-- Call Buttons -->
+<div class="flex space-x-3 mt-4">
+    <button onclick="startCall('video')" class="bg-green-500 px-4 py-2 rounded-lg hover:bg-green-600">📹 Video Call</button>
+    <button onclick="startCall('audio')" class="bg-yellow-500 px-4 py-2 rounded-lg hover:bg-yellow-600">🎙️ Audio Call</button>
+    <button onclick="endCall()" class="bg-red-500 px-4 py-2 rounded-lg hover:bg-red-600">❌ End Call</button>
+</div>
+
+<!-- Video Call UI -->
+<div id="videoContainer" class="relative w-full max-w-4xl mt-6 hidden">
+    <!-- Large Video for Other User -->
+    <video id="remoteVideo" autoplay playsinline class="w-full h-96 rounded-lg shadow-lg"></video>
+
+    <!-- Small Video (Your Video) in Corner -->
+    <video id="localVideo" autoplay muted playsinline class="absolute bottom-3 right-3 w-32 h-24 rounded-lg shadow-lg border border-white"></video>
+</div>
+
+
+<!-- Incoming Call Pop-up -->
+<div id="incomingCallPopup" class="hidden fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white p-6 rounded-lg shadow-lg text-center">
+    <h3 id="callerName" class="text-lg font-semibold"></h3>
+    <p class="text-sm">is calling you...</p>
+    <div class="flex justify-center mt-4 space-x-3">
+        <button onclick="acceptCall()" class="bg-green-500 px-4 py-2 rounded-lg hover:bg-green-600">Accept</button>
+        <button onclick="rejectCall()" class="bg-red-500 px-4 py-2 rounded-lg hover:bg-red-600">Reject</button>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+
+//this is for chat
+
+function connectSocket() {
+    try {
+        const socket = io('http://127.0.0.1:5000', {
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 3000,
+            transports: ['websocket'],
+            upgrade: false
+        });
+
+        socket.on('connect', () => {
+            console.log("✅ WebSocket connected.");
+            socket.emit('join', { username: "{{ sender.username }}" });
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.error("❌ WebSocket disconnected:", reason);
+            alert("Connection lost. Trying to reconnect...");
+        });
+
+        socket.on('reconnect_attempt', () => {
+            console.warn("🔄 Attempting to reconnect...");
+        });
+
+        socket.on('error', (data) => {
+            console.error("⚠️ WebSocket error:", data.message);
+            alert("WebSocket error occurred. Please try again.");
+        });
+
+        return socket;
+    } catch (error) {
+        console.error("⚠️ Error initializing WebSocket:", error);
+        alert("Failed to connect to WebSocket. Please refresh the page.");
+    }
+}
+
+const socket = connectSocket();
+
+
+socket.on('new_message', (data) => {
+            const messageList = document.getElementById('messages');
+            const message = document.createElement('li');
+            message.className = `p-3 rounded-lg ${data.sender === "{{ sender.username }}" ? 'bg-blue-500 text-white self-end' : 'bg-gray-700 text-gray-300 self-start'}`;
+            message.innerHTML = `
+                <strong>${data.sender === "{{ sender.username }}" ? 'You' : data.sender}:</strong>
+                ${data.content || ''}
+                ${data.attachment ? formatAttachment(data.attachment, data.attachment_type) : ''}
+                <em class="text-xs block mt-1">${new Date(data.timestamp).toLocaleTimeString()}</em>
+            `;
+            messageList.appendChild(message);
+        });
+
+        function sendMessage() {
+    const contentInput = document.getElementById('messageInput');
+    const fileInput = document.getElementById('attachmentInput');
+    const file = fileInput.files[0];
+    const content = contentInput.value.trim();
+
+    if (!content && !file) {
+        alert("Message or file is required!");
+        return;
+    }
+
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            socket.emit('message', {
+                sender: "{{ sender.username }}",
+                receiver: "{{ receiver.username }}",
+                content: content,
+                attachment: file.name,
+                attachmentType: getAttachmentType(file.name),
+                fileData: e.target.result.split(',')[1]
+            });
+
+            // ✅ Reset file input & clear displayed file name
+            fileInput.value = '';
+            document.getElementById("fileNameDisplay").innerText = '';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        socket.emit('message', {
+            sender: "{{ sender.username }}",
+            receiver: "{{ receiver.username }}",
+            content: content
+        });
+    }
+
+    // ✅ Clear text input after sending
+    contentInput.value = '';
+}
+
+    document.getElementById("attachmentInput").addEventListener("change", function() {
+        const fileName = this.files[0] ? this.files[0].name : "No file selected";
+        document.getElementById("fileNameDisplay").innerText = `📂 Selected File: ${fileName}`;
+    });
+
+    
+
+
+    function getAttachmentType(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return 'photo';
+        if (['mp4', 'mkv'].includes(ext)) return 'video';
+        if (['mp3', 'wav'].includes(ext)) return 'audio';
+        return 'unknown';
+    }
+
+    function formatAttachment(attachment, type) {
+        if (!attachment || attachment === "None") return '';
+
+        const fileUrl = `/static/uploads/${attachment}`;
+
+        if (type === 'photo') return `<img src="${fileUrl}" class="rounded-lg w-32 mt-2">`;
+            if (type === 'video') return `<video controls class="w-64 mt-2"><source src="${fileUrl}"></video>`;
+            if (type === 'audio') return `<audio controls class="mt-2"><source src="${fileUrl}"></audio>`;
+            return `<a href="${fileUrl}" class="text-blue-300 underline mt-2">${attachment}</a>`;
+    }
+
+    // ✅ Auto-format existing messages on page load
+    document.addEventListener("DOMContentLoaded", () => {
+        document.querySelectorAll(".attachment-container").forEach((container) => {
+            const attachment = container.dataset.attachment;
+            const type = container.dataset.type;
+            container.innerHTML = formatAttachment(attachment, type);
+        });
+    });
+
+//from here up it is for chat
+
+let iceCandidateQueue = [];
+let peerConnectionReady = false;
+let peerConnection;
+let callEnded = false;
+    const config = { 
+        iceServers: [
+            { urls: "stun:stun.relay.metered.ca:80" },
+            {
+        urls: "turn:global.relay.metered.ca:80",
+        username: "6df0e7373b6477c1209bd9af",
+        credential: "jm8Me+6LpRH3pRED",
+      },
+            {
+        urls: "turn:global.relay.metered.ca:80?transport=tcp",
+        username: "6df0e7373b6477c1209bd9af",
+        credential: "jm8Me+6LpRH3pRED",
+      },
+            
+        ], 
+        iceTransportPolicy: "all"  // Force TURN if STUN fails
+    };
+
+    function startCall(type) {
+    console.log("📞 Starting a new call...");
+
+    // ✅ If peerConnection already exists, close it first
+    if (peerConnection) {
+        console.warn("⚠️ Closing existing peerConnection before starting a new call...");
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    // ✅ Create a new PeerConnection
+    peerConnection = new RTCPeerConnection(config);
+    console.log("✅ New PeerConnection created.");
+
+    navigator.mediaDevices.getUserMedia({ video: type === "video", audio: true })
+        .then((stream) => {
+            document.getElementById("videoContainer").classList.remove("hidden");
+            document.getElementById("localVideo").srcObject = stream;
+
+            stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit("ice-candidate", { candidate: event.candidate });
+                }
+            };
+
+            peerConnection.ontrack = (event) => {
+                document.getElementById("remoteVideo").srcObject = event.streams[0];
+            };
+
+            // ✅ Log before calling createOffer()
+            console.log("🔄 Calling createOffer()...");
+            return peerConnection.createOffer();
+        })
+        .then((offer) => {
+            console.log("✅ Offer created successfully. Setting Local Description...");
+            return peerConnection.setLocalDescription(offer);
+        })
+        .then(() => {
+            console.log("📡 Emitting call-initiated event...");
+            socket.emit("call-initiated", { 
+                caller: "{{ sender.username }}",
+                receiver: "{{ receiver.username }}",
+                offer: peerConnection.localDescription,
+                callType: type
+            });
+        })
+        .catch((error) => {
+            console.error("⚠️ Error creating WebRTC offer:", error);
+        });
+}
+
+
+
+
+
+function endCall() {
+    if (callEnded) {
+        console.warn("⚠️ `endCall()` was already triggered, skipping...");
+        return;
+    }
+    callEnded = true;
+    
+    console.log("❌ Ending the call...");
+
+    if (peerConnection) {
+        console.log("⚠️ Closing peerConnection...");
+        peerConnection.getSenders().forEach((sender) => peerConnection.removeTrack(sender));
+        peerConnection.onicecandidate = null;
+        peerConnection.ontrack = null;
+        peerConnection.close();
+        peerConnection = null;
+        console.log("✅ PeerConnection closed.");
+    }
+
+    let localStream = document.getElementById("localVideo").srcObject;
+    if (localStream) {
+        localStream.getTracks().forEach((track) => track.stop());
+    }
+
+    document.getElementById("localVideo").srcObject = null;
+    document.getElementById("remoteVideo").srcObject = null;
+    document.getElementById("videoContainer").classList.add("hidden");
+
+    socket.emit("end-call");
+
+    setTimeout(() => {
+        callEnded = false;  // Allow a new call to be made after a delay
+    }, 2000);
+}
+
+
+
+
+if (!peerConnection) {
+    console.error("❌ ERROR: `peerConnection` is NULL before calling createOffer(). This should NEVER happen!");
+}
+
+
+
+
+
+socket.on("offer", (data) => {
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    peerConnection = new RTCPeerConnection(config);
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            socket.emit("ice-candidate", { candidate: event.candidate });
+        }
+    };
+
+    peerConnection.ontrack = (event) => {
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
+    };
+
+    peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
+        .then(() => navigator.mediaDevices.getUserMedia({ video: true, audio: true }))
+        .then((stream) => {
+            document.getElementById("videoContainer").classList.remove("hidden");
+            document.getElementById("localVideo").srcObject = stream;
+            stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
+
+            return peerConnection.createAnswer();
+        })
+        .then((answer) => {
+            peerConnection.setLocalDescription(answer);
+            socket.emit("answer", { answer: answer });
+        })
+        .catch((error) => console.error("⚠️ Error setting remote description:", error));
+});
+
+
+
+window.addEventListener("beforeunload", () => {
+    if (peerConnection) {
+        peerConnection.close();
+    }
+});
+
+
+
+
+
+socket.on("answer", (data) => {
+    if (peerConnection && !peerConnection.remoteDescription) {
+        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
+            .then(() => console.log("✅ Remote answer set successfully."))
+            .catch((error) => console.error("⚠️ Error setting remote answer:", error));
+    }
+});
+
+
+
+socket.on("incoming-call", (data) => {
+    document.getElementById("callerName").innerText = `${data.caller}`;
+    document.getElementById("incomingCallPopup").style.display = "block";
+
+    // Save the offer to accept later
+    window.incomingCallData = data;
+});
+
+function acceptCall() {
+    document.getElementById("incomingCallPopup").style.display = "none";
+
+    // ✅ Show the video container for User B
+    document.getElementById("videoContainer").classList.remove("hidden");
+    document.getElementById("videoContainer").classList.add("flex");
+
+    const data = window.incomingCallData;
+    peerConnection = new RTCPeerConnection(config);
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            socket.emit("ice-candidate", { candidate: event.candidate });
+        }
+    };
+
+    peerConnection.ontrack = (event) => {
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
+    };
+
+    navigator.mediaDevices.getUserMedia({ video: data.callType === "video", audio: true })
+        .then((stream) => {
+            document.getElementById("localVideo").srcObject = stream;
+            stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
+
+            peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
+                .then(() => peerConnection.createAnswer())
+                .then((answer) => {
+                    peerConnection.setLocalDescription(answer);
+                    socket.emit("answer", { answer: answer });
+                })
+                .catch((error) => console.error("⚠️ Error setting remote description:", error));
+        });
+}
+
+
+function rejectCall() {
+    document.getElementById("incomingCallPopup").style.display = "none";
+    socket.emit("call-rejected", { caller: window.incomingCallData.caller });
+}
+
+
+socket.on("ice-candidate", (data) => {
+    if (peerConnection && peerConnection.remoteDescription) {
+        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+            .catch((error) => console.error("⚠️ Failed to add ICE candidate:", error));
+    } else {
+        console.warn("⚠️ ICE candidate received before remote description was set. Queuing...");
+        iceCandidateQueue.push(data.candidate);  // Queue ICE candidates
+    }
+});
+
+
+
+socket.off("end-call"); // ✅ Remove previous listener before adding a new one
+socket.on("end-call", () => {
+    if (!callEnded) {
+        endCall();
+    }
+});
+
+
+
+</script>
+
+</body>
+
+</html>

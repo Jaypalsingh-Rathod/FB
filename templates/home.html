@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles-home.css') }}">
+
+</head>
+
+
+<style>
+    #leftbox {
+        float: left;
+        background: rgb(39, 38, 38);
+        width: 24%;
+        height: fit-content;
+        border-radius: 15px;
+        margin: 5px;
+    }
+
+    #middlebox {
+        float: left;
+        background: rgb(72, 72, 53);
+        width: 49%;
+        height: fit-content;
+        border-radius: 15px;
+        margin-top: 5px;
+        margin-right: 10px;
+        margin-bottom: 10px;
+        margin-left: 10px;
+    }
+
+    #rightbox {
+        float: right;
+        background: rgb(39, 38, 38);
+        width: 24%;
+        height: fit-content;
+        border-radius: 15px;
+        margin: 5px;
+    }
+</style>
+
+
+
+
+<body>
+    <div1 id="leftbox">
+    <h2>Welcome, {{ user.first_name }} {{ user.last_name }} <a href="{{ url_for('logout') }}">Logout</a></h2>
+
+    <nav>
+        <a href="{{ url_for('search') }}">Search Friends</a>
+    </nav>
+
+    <h2>Friend Requests</h2>
+        {% if current_user and current_user.received_requests %}
+            {% for request in current_user.received_requests %}
+                {% if request.status == "pending" %}
+                    <p>{{ request.sender.username }} sent you a friend request.</p>
+                    <form action="{{ url_for('accept_request', request_id=request.id) }}" method="post">
+                        <button type="submit">Accept</button>
+                    </form>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <p>No friend requests.</p>
+        {% endif %}
+
+    </div1>
+
+
+    <div2 id="middlebox">
+    <h3>Your Posts</h3>
+    <ul>
+        {% for post in posts %}
+            <li>{{ post.content }}</li>
+            {% if post.image %}
+            <img src="{{ url_for('static', filename='uploads/' + post.image) }}" alt="Post Image" width="300">
+        {% endif %}
+        <p><small>Posted by {{ post.author.username }} on {{ post.timestamp }}</small></p>
+        {% endfor %}
+    </ul>
+    <a href="{{ url_for('create_post') }}">Create a new post</a>
+    </div2>
+
+
+    <div3 id="rightbox">
+    <h3>All Users</h3>
+    <ul>
+        {% for u in users %}
+            <li><a href="{{ url_for('profile', username=u.username) }}">{{ u.username }}</a></li>
+        {% endfor %}
+    </ul>
+    </div3>
+</body>
+</html>
